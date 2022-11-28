@@ -51,4 +51,10 @@ describe('blog routes', () => {
       ]
     `);
   });
+
+  it('GET api/v1/restaurant/1 should return a single restaurant with nested comments', async () => {
+    const res = await request(app).get('/api/v1/restaurants/1');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchInlineSnapshot();
+  });
 });
