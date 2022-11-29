@@ -4,11 +4,18 @@ const request = require('supertest');
 const app = require('../lib/app');
 const UserService = require('../lib/services/UserService.js');
 
-const newUser = {
-  firstName: 'Test',
-  lastName: 'User',
-  email: 'test@example.com',
-  password: '12345',
+const joe = {
+  firstName: 'joe',
+  lastName: 'buck',
+  email: 'joebuck@tester.com',
+  password: 'password',
+};
+
+const admin = {
+  firstName: 'admin',
+  lastName: 'admin',
+  email: 'admin',
+  password: 'password',
 };
 
 describe('blog routes', () => {
@@ -98,17 +105,17 @@ describe('blog routes', () => {
     `);
   });
 
-  const registerAndLogin = async () => {
+  const registerAndLoginJoe = async () => {
     const agent = request.agent(app);
-    const user = await UserService.create(newUser);
+    const user = await UserService.create(joe);
     await agent
       .post('/api/v1/users/sessions')
-      .send({ email: newUser.email, password: newUser.password });
+      .send({ email: joe.email, password: joe.password });
     return [agent, user];
   };
 
   it('POST /api/v1/restaurant/:id/reviews should create a new review when logged in', async () => {
-    const [agent] = await registerAndLogin();
+    const [agent] = await registerAndLoginJoe();
     const res = await agent
       .post('/api/v1/restaurants/1/reviews')
       .send({ stars: 5, detail: 'It was okay' });
@@ -124,36 +131,161 @@ describe('blog routes', () => {
     `);
   });
 
-  it('DELETE /api/v1/reviews/:id should DELETE a new review when logged in or authorized', async () => {
-    // Creates a Admin
-    const admin = {
-      firstName: 'Admin',
-      lastName: 'Dude',
-      email: 'admin',
-      password: 'password',
-    };
-    await UserService.create(admin);
-    // Login admin
+  const registerAndLoginAdmin = async () => {
     const agent = request.agent(app);
+    const user = await UserService.create(admin);
     await agent
       .post('/api/v1/users/sessions')
-      .send({ email: 'admin', password: 'password' });
-    // Posts a Review
+      .send({ email: admin.email, password: admin.password });
+    return [agent, user];
+  };
+
+  it('DELETE /api/v1/reviews/:id should DELETE any review when admin', async () => {
+    const [agent] = await registerAndLoginAdmin();
     await agent
       .post('/api/v1/restaurants/1/reviews')
       .send({ stars: 2, detail: 'NEW REVIEW' });
     // Finds new Review
+    const res = await request(app).get('/api/v1/reviews');
+    expect(res.body).toMatchInlineSnapshot(`
+      Array [
+        Object {
+          "detail": "Best restaurant ever!",
+          "id": "1",
+          "restaurant_id": "1",
+          "stars": 5,
+          "user_id": "1",
+        },
+        Object {
+          "detail": "Terrible service :(",
+          "id": "2",
+          "restaurant_id": "1",
+          "stars": 1,
+          "user_id": "2",
+        },
+        Object {
+          "detail": "It was fine.",
+          "id": "3",
+          "restaurant_id": "1",
+          "stars": 4,
+          "user_id": "3",
+        },
+        Object {
+          "detail": "NEW REVIEW",
+          "id": "4",
+          "restaurant_id": "1",
+          "stars": 2,
+          "user_id": "4",
+        },
+      ]
+    `);
+    // Deletes own and other reviews
+    await agent.delete('/api/v1/reviews/4');
+    await agent.delete('/api/v1/reviews/2');
+    // Checks all Reviews
+    const response = await request(app).get('/api/v1/reviews');
+    expect(response.body).toMatchInlineSnapshot(`
+      Array [
+        Object {
+          "detail": "Best restaurant ever!",
+          "id": "1",
+          "restaurant_id": "1",
+          "stars": 5,
+          "user_id": "1",
+        },
+        Object {
+          "detail": "It was fine.",
+          "id": "3",
+          "restaurant_id": "1",
+          "stars": 4,
+          "user_id": "3",
+        },
+      ]
+    `);
+  });
+
+  it('DELETE /api/v1/reviews/:id should NOT DELETE others reviews', async () => {
+    const [agent] = await registerAndLoginJoe();
+    const resp = await agent.delete('/api/v1/reviews/2');
+    expect(resp.status).toBe(403);
+    const res = await request(app).get('/api/v1/reviews/');
+    expect(res.body).toMatchInlineSnapshot(`
+      Array [
+        Object {
+          "detail": "Best restaurant ever!",
+          "id": "1",
+          "restaurant_id": "1",
+          "stars": 5,
+          "user_id": "1",
+        },
+        Object {
+          "detail": "Terrible service :(",
+          "id": "2",
+          "restaurant_id": "1",
+          "stars": 1,
+          "user_id": "2",
+        },
+        Object {
+          "detail": "It was fine.",
+          "id": "3",
+          "restaurant_id": "1",
+          "stars": 4,
+          "user_id": "3",
+        },
+      ]
+    `);
+  });
+
+  it('DELETE /api/v1/reviews/:id should NOT DELETE a review without being logged in', async () => {
+    const resp = await request(app).delete('/api/v1/reviews/2');
+    expect(resp.status).toBe(401);
+    const res = await request(app).get('/api/v1/reviews/');
+    expect(res.body).toMatchInlineSnapshot(`
+      Array [
+        Object {
+          "detail": "Best restaurant ever!",
+          "id": "1",
+          "restaurant_id": "1",
+          "stars": 5,
+          "user_id": "1",
+        },
+        Object {
+          "detail": "Terrible service :(",
+          "id": "2",
+          "restaurant_id": "1",
+          "stars": 1,
+          "user_id": "2",
+        },
+        Object {
+          "detail": "It was fine.",
+          "id": "3",
+          "restaurant_id": "1",
+          "stars": 4,
+          "user_id": "3",
+        },
+      ]
+    `);
+  });
+
+  it('DELETE /api/v1/reviews/:id should DELETE if it their own review ', async () => {
+    const [agent] = await registerAndLoginJoe();
+    // Post
+    await agent
+      .post('/api/v1/restaurants/1/reviews')
+      .send({ stars: 4, detail: 'I AM JOE' });
+    // Checks for review
     const res = await request(app).get('/api/v1/reviews/4');
-    expect(res.body).toEqual({
-      id: '4',
-      user_id: '4',
-      restaurant_id: '1',
-      stars: 2,
-      detail: 'NEW REVIEW',
-    });
+    expect(res.body).toMatchInlineSnapshot(`
+      Object {
+        "detail": "I AM JOE",
+        "id": "4",
+        "restaurant_id": "1",
+        "stars": 4,
+        "user_id": "4",
+      }
+    `);
     // Deletes review
-    const resp = await agent.delete('/api/v1/reviews/4');
-    expect(resp.status).toBe(200);
+    await agent.delete('/api/v1/reviews/4');
     // Checks all Reviews
     const response = await request(app).get('/api/v1/reviews');
     expect(response.body).toMatchInlineSnapshot(`
@@ -178,7 +310,7 @@ describe('blog routes', () => {
           "restaurant_id": "1",
           "stars": 4,
           "user_id": "3",
-        },
+        }
       ]
     `);
   });
