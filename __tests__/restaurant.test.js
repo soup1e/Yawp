@@ -123,4 +123,63 @@ describe('blog routes', () => {
       }
     `);
   });
+
+  it('DELETE /api/v1/reviews/:id should DELETE a new review when logged in or authorized', async () => {
+    // Creates a Admin
+    const admin = {
+      firstName: 'Admin',
+      lastName: 'Dude',
+      email: 'admin',
+      password: 'password',
+    };
+    await UserService.create(admin);
+    // Login admin
+    const agent = request.agent(app);
+    await agent
+      .post('/api/v1/users/sessions')
+      .send({ email: 'admin', password: 'password' });
+    // Posts a Review
+    await agent
+      .post('/api/v1/restaurants/1/reviews')
+      .send({ stars: 2, detail: 'NEW REVIEW' });
+    // Finds new Review
+    const res = await request(app).get('/api/v1/reviews/4');
+    expect(res.body).toEqual({
+      id: '4',
+      user_id: '4',
+      restaurant_id: '1',
+      stars: 2,
+      detail: 'NEW REVIEW',
+    });
+    // Deletes review
+    const resp = await agent.delete('/api/v1/reviews/4');
+    expect(resp.status).toBe(200);
+    // Checks all Reviews
+    const response = await request(app).get('/api/v1/reviews');
+    expect(response.body).toMatchInlineSnapshot(`
+      Array [
+        Object {
+          "detail": "Best restaurant ever!",
+          "id": "1",
+          "restaurant_id": "1",
+          "stars": 5,
+          "user_id": "1",
+        },
+        Object {
+          "detail": "Terrible service :(",
+          "id": "2",
+          "restaurant_id": "1",
+          "stars": 1,
+          "user_id": "2",
+        },
+        Object {
+          "detail": "It was fine.",
+          "id": "3",
+          "restaurant_id": "1",
+          "stars": 4,
+          "user_id": "3",
+        },
+      ]
+    `);
+  });
 });
