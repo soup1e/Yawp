@@ -113,6 +113,14 @@ describe('blog routes', () => {
       .post('/api/v1/restaurants/1/reviews')
       .send({ stars: 5, detail: 'It was okay' });
     expect(res.status).toBe(200);
-    expect(res.body).toMatchInlineSnapshot();
+    expect(res.body).toMatchInlineSnapshot(`
+      Object {
+        "detail": "It was okay",
+        "id": "4",
+        "restaurant_id": "1",
+        "stars": 5,
+        "user_id": "4",
+      }
+    `);
   });
 });
