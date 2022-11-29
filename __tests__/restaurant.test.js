@@ -2,6 +2,14 @@ const pool = require('../lib/utils/pool');
 const setup = require('../data/setup');
 const request = require('supertest');
 const app = require('../lib/app');
+const UserService = require('../lib/services/UserService.js');
+
+const newUser = {
+  firstName: 'Test',
+  lastName: 'User',
+  email: 'test@example.com',
+  password: '12345',
+};
 
 describe('blog routes', () => {
   beforeEach(() => {
@@ -57,7 +65,12 @@ describe('blog routes', () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchInlineSnapshot(`
       Object {
-        "comments": Array [
+        "cost": 1,
+        "cuisine": "American",
+        "id": "1",
+        "image": "https://media-cdn.tripadvisor.com/media/photo-o/05/dd/53/67/an-assortment-of-donuts.jpg",
+        "name": "Pip's Original",
+        "reviews": Array [
           Object {
             "detail": "Best restaurant ever!",
             "id": "1",
@@ -80,13 +93,26 @@ describe('blog routes', () => {
             "user_id": "3",
           },
         ],
-        "cost": 1,
-        "cuisine": "American",
-        "id": "1",
-        "image": "https://media-cdn.tripadvisor.com/media/photo-o/05/dd/53/67/an-assortment-of-donuts.jpg",
-        "name": "Pip's Original",
         "website": "http://www.PipsOriginal.com",
       }
     `);
+  });
+
+  const registerAndLogin = async () => {
+    const agent = request.agent(app);
+    const user = await UserService.create(newUser);
+    await agent
+      .post('/api/v1/users/sessions')
+      .send({ email: newUser.email, password: newUser.password });
+    return [agent, user];
+  };
+
+  it('POST /api/v1/restaurant/:id/reviews should create a new review when logged in', async () => {
+    const [agent] = await registerAndLogin();
+    const res = await agent
+      .post('/api/v1/restaurants/1/reviews')
+      .send({ stars: 5, detail: 'It was okay' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchInlineSnapshot();
   });
 });
