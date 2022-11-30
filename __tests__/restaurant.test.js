@@ -273,6 +273,7 @@ describe('blog routes', () => {
     await agent
       .post('/api/v1/restaurants/1/reviews')
       .send({ stars: 4, detail: 'I AM JOE' });
+
     // Checks for review
     const res = await request(app).get('/api/v1/reviews/4');
     expect(res.body).toMatchInlineSnapshot(`
@@ -310,7 +311,7 @@ describe('blog routes', () => {
           "restaurant_id": "1",
           "stars": 4,
           "user_id": "3",
-        }
+        },
       ]
     `);
   });
